@@ -100,6 +100,10 @@ function Select-GCloudProfile {
     if ($ProfileName) {
         $target = Join-Path $root $ProfileName
         if (-not (Test-Path -LiteralPath $target -PathType Container)) {
+            if (-not $PSCmdlet.ShouldContinue("Profile `"$ProfileName`" does not exist ($target). Create it?", 'Create new profile')) {
+                Write-CloudSelectHost "Aborted: profile $ProfileName was not created" -ForegroundColor Red
+                return
+            }
             New-Item -ItemType Directory -Path $target -Force | Out-Null
             Write-CloudSelectHost "Created a new profile directory: $target" -ForegroundColor DarkGray
         }
@@ -226,6 +230,10 @@ function Select-AzureCLIProfile {
     if ($ProfileName) {
         $target = Join-Path $root $ProfileName
         if (-not (Test-Path -LiteralPath $target -PathType Container)) {
+            if (-not $PSCmdlet.ShouldContinue("Profile `"$ProfileName`" does not exist ($target). Create it?", 'Create new profile')) {
+                Write-CloudSelectHost "Aborted: profile $ProfileName was not created" -ForegroundColor Red
+                return
+            }
             New-Item -ItemType Directory -Path $target -Force | Out-Null
             Write-CloudSelectHost "Created a new profile directory: $target" -ForegroundColor DarkGray
         }

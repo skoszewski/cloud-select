@@ -37,6 +37,13 @@ gcloud-select() {
         select)
             if [[ -n "${1-}" ]]; then
                 if [[ ! -d "$root/$1" ]]; then
+                    local reply=
+                    printf 'Profile "%s" does not exist (%s). Create it? [y/N] ' "$1" "$root/$1" >&2
+                    read -r reply
+                    if [[ "$reply" != [Yy] && "$reply" != [Yy][Ee][Ss] ]]; then
+                        printf 'Aborted: profile %s%s%s was not created\n' "$bold" "$1" "$reset" >&2
+                        return 1
+                    fi
                     mkdir -p "$root/$1" || return 1
                     printf 'Created a new profile directory: %s%s%s\n' "$dim" "$root/$1" "$reset"
                 fi
@@ -112,6 +119,13 @@ azurecli-select() {
         select)
             if [[ -n "${1-}" ]]; then
                 if [[ ! -d "$root/$1" ]]; then
+                    local reply=
+                    printf 'Profile "%s" does not exist (%s). Create it? [y/N] ' "$1" "$root/$1" >&2
+                    read -r reply
+                    if [[ "$reply" != [Yy] && "$reply" != [Yy][Ee][Ss] ]]; then
+                        printf 'Aborted: profile %s%s%s was not created\n' "$bold" "$1" "$reset" >&2
+                        return 1
+                    fi
                     mkdir -p "$root/$1" || return 1
                     printf 'Created a new profile directory: %s%s%s\n' "$dim" "$root/$1" "$reset"
                 fi
