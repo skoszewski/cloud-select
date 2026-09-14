@@ -25,6 +25,26 @@ function Write-CloudSelectHost {
     }
 }
 
+# Resolves (and optionally creates) a profile directory.
+# Returns the absolute path on success, or $null after printing an error.
+function Resolve-GCloudSelectProfileDir {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)] [string] $ProfileName,
+        [Parameter(Mandatory)] [string] $Root
+    )
+    $target = Join-Path $Root $ProfileName
+    if (-not (Test-Path -LiteralPath $target -PathType Container)) {
+        if (-not $PSCmdlet.ShouldContinue("Profile `"$ProfileName`" does not exist ($target). Create it?", 'Create new profile')) {
+            Write-CloudSelectHost "Aborted: profile $ProfileName was not created" -ForegroundColor Red
+            return $null
+        }
+        New-Item -ItemType Directory -Path $target -Force | Out-Null
+        Write-CloudSelectHost "Created a new profile directory: $target" -ForegroundColor DarkGray
+    }
+    (Resolve-Path -LiteralPath $target).Path
+}
+
 function Select-GCloudProfile {
     <#
     .SYNOPSIS
@@ -50,6 +70,13 @@ function Select-GCloudProfile {
     .EXAMPLE
         Select-GCloudProfile -Show
         Shows the active profile directory and configuration.
+    .EXAMPLE
+        Select-GCloudProfile -ADC work
+        Sets GOOGLE_APPLICATION_CREDENTIALS to the application_default_credentials.json
+        in the "work" profile directory, without changing CLOUDSDK_CONFIG.
+    .EXAMPLE
+        Select-GCloudProfile -ADC
+        Unsets GOOGLE_APPLICATION_CREDENTIALS.
     .NOTES
         The profile root defaults to "$HOME/.config/gcloud.d" and can be overridden with
         the GCLOUD_PROFILE_ROOT environment variable, or by setting CLOUD_CLI_PROFILE_DIR
@@ -76,7 +103,28 @@ function Select-GCloudProfile {
         [string] $ProfileName,
 
         [Parameter(ParameterSetName = 'Show', Mandatory)]
-        [switch] $Show
+        [switch] $Show,
+
+        [Parameter(ParameterSetName = 'ADC', Mandatory)]
+        [switch] $ADC,
+
+        [Parameter(ParameterSetName = 'ADC', Position = 0)]
+        [ArgumentCompleter({
+            param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+            $root = if ($env:GCLOUD_PROFILE_ROOT) {
+                $env:GCLOUD_PROFILE_ROOT
+            } else {
+                $homeDir = if ((Get-Variable -Name IsWindows -Scope Global -ErrorAction SilentlyContinue) -and -not $IsWindows) { $env:HOME } else { $env:USERPROFILE }
+                $base = if ($env:CLOUD_CLI_PROFILE_DIR) { $env:CLOUD_CLI_PROFILE_DIR } else { Join-Path $homeDir '.config' }
+                Join-Path $base 'gcloud.d'
+            }
+            if (Test-Path -LiteralPath $root -PathType Container) {
+                Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -like "$wordToComplete*" } |
+                    ForEach-Object { $_.Name }
+            }
+        })]
+        [string] $ADCProfile
     )
 
     $root = if ($env:GCLOUD_PROFILE_ROOT) {
@@ -97,17 +145,23 @@ function Select-GCloudProfile {
         return
     }
 
-    if ($ProfileName) {
-        $target = Join-Path $root $ProfileName
-        if (-not (Test-Path -LiteralPath $target -PathType Container)) {
-            if (-not $PSCmdlet.ShouldContinue("Profile `"$ProfileName`" does not exist ($target). Create it?", 'Create new profile')) {
-                Write-CloudSelectHost "Aborted: profile $ProfileName was not created" -ForegroundColor Red
-                return
-            }
-            New-Item -ItemType Directory -Path $target -Force | Out-Null
-            Write-CloudSelectHost "Created a new profile directory: $target" -ForegroundColor DarkGray
+    if ($PSCmdlet.ParameterSetName -eq 'ADC') {
+        if ($ADCProfile) {
+            $target = Resolve-GCloudSelectProfileDir -ProfileName $ADCProfile -Root $root
+            if (-not $target) { return }
+            $env:GOOGLE_APPLICATION_CREDENTIALS = Join-Path $target 'application_default_credentials.json'
+            Write-CloudSelectHost "Set GOOGLE_APPLICATION_CREDENTIALS: $($env:GOOGLE_APPLICATION_CREDENTIALS)" -ForegroundColor Green
+        } else {
+            Remove-Item Env:\GOOGLE_APPLICATION_CREDENTIALS -ErrorAction SilentlyContinue
+            Write-Host 'Unset GOOGLE_APPLICATION_CREDENTIALS'
         }
-        $env:CLOUDSDK_CONFIG = (Resolve-Path -LiteralPath $target).Path
+        return
+    }
+
+    if ($ProfileName) {
+        $target = Resolve-GCloudSelectProfileDir -ProfileName $ProfileName -Root $root
+        if (-not $target) { return }
+        $env:CLOUDSDK_CONFIG = $target
         Write-CloudSelectHost "Selected gcloud CLI profile: $ProfileName" -ForegroundColor Green
     } else {
         $gcloudDefaultConfigDir = if (-not (Get-Variable -Name IsWindows -Scope Global -ErrorAction SilentlyContinue) -or $IsWindows) {

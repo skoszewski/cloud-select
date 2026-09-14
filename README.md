@@ -119,6 +119,8 @@ Alternatively, you can override each profile root individually with:
 | `gcloud-select select <profile>` | Export `CLOUDSDK_CONFIG=$GCLOUD_PROFILE_ROOT/<profile>` |
 | `gcloud-select select` | Unset `CLOUDSDK_CONFIG`, so the gcloud CLI uses `~/.config/gcloud` |
 | `gcloud-select show` | Print the active configuration of the selected profile |
+| `gcloud-select adc <profile>` | Set `GOOGLE_APPLICATION_CREDENTIALS` to `$GCLOUD_PROFILE_ROOT/<profile>/application_default_credentials.json` |
+| `gcloud-select adc` | Unset `GOOGLE_APPLICATION_CREDENTIALS` |
 | `gcloud-select help` | Print usage information |
 
 ```console
@@ -126,6 +128,8 @@ $ gcloud-select select work
 Selected gcloud CLI profile: work
 
 $ gcloud auth login        # credentials saved in work profile only
+
+$ gcloud-select adc work   # point GOOGLE_APPLICATION_CREDENTIALS at work's ADC file
 
 $ gcloud-select select     # back to default
 ```
@@ -152,7 +156,7 @@ $ azurecli-select select   # back to default
 ```
 
 ### Tab Completion
-Press <kbd>Tab</kbd> after typing `gcloud-select` or `azurecli-select` to list the commands. Press <kbd>Tab</kbd> after `select` to automatically complete the profiles that already exist in your profile directory.
+Press <kbd>Tab</kbd> after typing `gcloud-select` or `azurecli-select` to list the commands. Press <kbd>Tab</kbd> after `select` or `adc` to automatically complete the profiles that already exist in your profile directory.
 
 ### PowerShell
 
@@ -163,6 +167,8 @@ Press <kbd>Tab</kbd> after typing `gcloud-select` or `azurecli-select` to list t
 | `Select-GCloudProfile <profile>` | Set `$env:CLOUDSDK_CONFIG` to `<GCLOUD_PROFILE_ROOT>\<profile>` (creating it if needed) |
 | `Select-GCloudProfile` | Reset to the gcloud default (`%APPDATA%\gcloud` on Windows, `~/.config/gcloud` on macOS/Linux, or unset if not found) |
 | `Select-GCloudProfile -Show` | Print the active configuration of the current profile |
+| `Select-GCloudProfile -ADC <profile>` | Set `$env:GOOGLE_APPLICATION_CREDENTIALS` to `<GCLOUD_PROFILE_ROOT>\<profile>\application_default_credentials.json` (creating the profile directory if needed), without changing `CLOUDSDK_CONFIG` |
+| `Select-GCloudProfile -ADC` | Unset `$env:GOOGLE_APPLICATION_CREDENTIALS` |
 | `Select-AzureCLIProfile <profile>` | Set `$env:AZURE_CONFIG_DIR` to `<AZURECLI_PROFILE_ROOT>\<profile>` (creating it if needed) |
 | `Select-AzureCLIProfile` | Reset to the Azure CLI default (`~\.azure`, or unset if not found) |
 | `Select-AzureCLIProfile -Show` | Print the signed-in context of the current profile |
@@ -175,6 +181,8 @@ PS> Select-GCloudProfile work
 Selected gcloud CLI profile: work
 
 PS> gcloud auth login        # credentials saved in work profile only
+
+PS> Select-GCloudProfile -ADC work  # point GOOGLE_APPLICATION_CREDENTIALS at work's ADC file
 
 PS> Select-GCloudProfile     # back to default
 ```

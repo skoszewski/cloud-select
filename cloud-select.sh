@@ -1,5 +1,25 @@
 # cloud-select.sh - Combined azurecli-select and gcloud-select for Bash and Zsh
 
+# Resolves (and optionally creates) a gcloud profile directory.
+# Caller must set bold/dim/reset/ered/ereset locals before calling.
+# On success: sets _GCLOUD_PROFILE_DIR and returns 0.
+# On failure: prints error to stderr and returns 1.
+_gcloud_select_profile_dir() {
+    local _profile="$1" _root="$2"
+    if [[ ! -d "$_root/$_profile" ]]; then
+        local _reply=
+        printf 'Profile "%s" does not exist (%s). Create it? [y/N] ' "$_profile" "$_root/$_profile" >&2
+        read -r _reply
+        if [[ "$_reply" != [Yy] && "$_reply" != [Yy][Ee][Ss] ]]; then
+            printf 'Aborted: profile %s%s%s was not created\n' "$bold" "$_profile" "$reset" >&2
+            return 1
+        fi
+        mkdir -p "$_root/$_profile" || return 1
+        printf 'Created a new profile directory: %s%s%s\n' "$dim" "$_root/$_profile" "$reset"
+    fi
+    _GCLOUD_PROFILE_DIR="$_root/$_profile"
+}
+
 gcloud-select() {
     local root="${GCLOUD_PROFILE_ROOT:-${CLOUD_CLI_PROFILE_DIR:-$HOME/.config}/gcloud.d}"
     local cmd="${1-}"
@@ -25,6 +45,9 @@ gcloud-select() {
             printf '  %sselect%s [<profile>]  switch to <profile>; with no argument, reset to\n' "$cyan" "$reset"
             printf '                      the gcloud default (.config/gcloud in %s%s%s or its parent)\n' "$dim" "$root" "$reset"
             printf '  %sshow%s                print the active configuration of the current profile\n' "$cyan" "$reset"
+            printf '  %sadc%s [<profile>]     set GOOGLE_APPLICATION_CREDENTIALS to\n' "$cyan" "$reset"
+            printf '                      <profile>/application_default_credentials.json;\n'
+            printf '                      with no argument, unset it\n'
             printf '  %shelp%s                print this message\n\n' "$cyan" "$reset"
             printf 'profiles are subdirectories of %s%s%s\n' "$dim" "$root" "$reset"
             return 0
@@ -36,19 +59,8 @@ gcloud-select() {
     case "$cmd" in
         select)
             if [[ -n "${1-}" ]]; then
-                if [[ ! -d "$root/$1" ]]; then
-                    local reply=
-                    printf 'Profile "%s" does not exist (%s). Create it? [y/N] ' "$1" "$root/$1" >&2
-                    read -r reply
-                    if [[ "$reply" != [Yy] && "$reply" != [Yy][Ee][Ss] ]]; then
-                        printf 'Aborted: profile %s%s%s was not created\n' "$bold" "$1" "$reset" >&2
-                        return 1
-                    fi
-                    mkdir -p "$root/$1" || return 1
-                    printf 'Created a new profile directory: %s%s%s\n' "$dim" "$root/$1" "$reset"
-                fi
-
-                export CLOUDSDK_CONFIG="$root/$1"
+                _gcloud_select_profile_dir "$1" "$root" || return 1
+                export CLOUDSDK_CONFIG="$_GCLOUD_PROFILE_DIR"
                 printf 'Selected gcloud CLI profile: %s%s%s\n' "$green$bold" "$1" "$reset"
             else
                 local default= candidate=
@@ -73,6 +85,16 @@ gcloud-select() {
                 printf "Profile directory is not set.\n\n"
             fi
             gcloud config list
+            ;;
+        adc)
+            if [[ -n "${1-}" ]]; then
+                _gcloud_select_profile_dir "$1" "$root" || return 1
+                export GOOGLE_APPLICATION_CREDENTIALS="$_GCLOUD_PROFILE_DIR/application_default_credentials.json"
+                printf 'Set GOOGLE_APPLICATION_CREDENTIALS: %s%s%s\n' "$green$bold" "$GOOGLE_APPLICATION_CREDENTIALS" "$reset"
+            else
+                unset GOOGLE_APPLICATION_CREDENTIALS
+                printf 'Unset GOOGLE_APPLICATION_CREDENTIALS\n'
+            fi
             ;;
         *)
             printf '%sgcloud-select: unknown command: %s%s\n' "$ered" "$cmd" "$ereset" >&2
@@ -220,6 +242,7 @@ _cloud_select_setup() {
             commands=(
                 '\''select:switch the active profile'\''
                 '\''show:print the active configuration'\''
+                '\''adc:set GOOGLE_APPLICATION_CREDENTIALS for the active profile'\''
                 '\''help:print usage'\''
             )
 
@@ -228,8 +251,8 @@ _cloud_select_setup() {
                 return
             fi
 
-            # Only "select" takes an argument, and only one.
-            [[ "${words[2]}" == select ]] || return 0
+            # Only "select" and "adc" take an argument, and only one.
+            [[ "${words[2]}" == select || "${words[2]}" == adc ]] || return 0
             (( CURRENT == 3 )) || return 0
 
             profiles=( ${root}/*(/N:t) )
@@ -280,14 +303,14 @@ _cloud_select_setup() {
             COMPREPLY=()
 
             if (( COMP_CWORD == 1 )); then
-                for n in select show help; do
+                for n in select show adc help; do
                     [[ "$n" == "$cur"* ]] && COMPREPLY+=( "$n" )
                 done
                 return 0
             fi
 
-            # Only "select" takes an argument, and only one.
-            [[ "${COMP_WORDS[1]}" == select ]] || return 0
+            # Only "select" and "adc" take an argument, and only one.
+            [[ "${COMP_WORDS[1]}" == select || "${COMP_WORDS[1]}" == adc ]] || return 0
             (( COMP_CWORD > 2 )) && return 0
 
             for d in "$root"/*/; do
